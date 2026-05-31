@@ -6,6 +6,10 @@
         <h1 class="page-title">Author Requests</h1>
         <span class="page-sub">{{ total }} request{{ total !== 1 ? 's' : '' }} total</span>
       </div>
+      <button class="btn-primary" @click="showUpgradeModal = true">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+        Upgrade to Author
+      </button>
     </div>
 
     <!-- Toolbar -->
@@ -121,6 +125,49 @@
       </div>
     </Teleport>
 
+    <!-- Upgrade to Author Modal -->
+    <Teleport to="body">
+      <div v-if="showUpgradeModal" class="modal-backdrop" @click.self="closeUpgradeModal">
+        <div class="modal">
+          <div class="modal-header">
+            <h2>Upgrade to Author</h2>
+            <button class="close-btn" @click="closeUpgradeModal">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <form @submit.prevent="submitUpgrade" class="modal-body">
+            <div class="field">
+              <label>Reason <span class="required">*</span></label>
+              <textarea v-model="upgradeForm.reason" rows="3" placeholder="Why do you want to become an author? (min 10 characters)" required></textarea>
+              <span v-if="upgradeErrors.reason" class="field-error">{{ upgradeErrors.reason[0] }}</span>
+            </div>
+            <div class="field">
+              <label>Phone <span class="required">*</span></label>
+              <input v-model="upgradeForm.phone" type="text" placeholder="e.g. +970599123456" required />
+              <span v-if="upgradeErrors.phone" class="field-error">{{ upgradeErrors.phone[0] }}</span>
+            </div>
+            <div class="field">
+              <label>Nationality</label>
+              <input v-model="upgradeForm.nationality" type="text" placeholder="e.g. Palestinian, British..." />
+              <span v-if="upgradeErrors.nationality" class="field-error">{{ upgradeErrors.nationality[0] }}</span>
+            </div>
+            <div class="field">
+              <label>Bio</label>
+              <textarea v-model="upgradeForm.bio" rows="3" placeholder="Short biography..."></textarea>
+              <span v-if="upgradeErrors.bio" class="field-error">{{ upgradeErrors.bio[0] }}</span>
+            </div>
+            <div v-if="upgradeError" class="form-error">{{ upgradeError }}</div>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" @click="closeUpgradeModal">Cancel</button>
+              <button type="submit" class="btn-primary" :disabled="upgradeSubmitting">
+                {{ upgradeSubmitting ? 'Sending...' : 'Send Request' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- Toast -->
     <Teleport to="body">
       <div v-if="toast.show" class="toast" :class="toast.type">{{ toast.message }}</div>
@@ -129,7 +176,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import api from '../services/api'
 
 const requests   = ref([])
@@ -138,6 +185,40 @@ const search     = ref('')
 const filterStatus = ref('pending')
 const submitting = ref(null)
 const total      = ref(0)
+
+const showUpgradeModal  = ref(false)
+const upgradeSubmitting = ref(false)
+const upgradeError      = ref('')
+const upgradeErrors     = ref({})
+const upgradeForm       = ref({ reason: '', phone: '', nationality: '', bio: '' })
+
+const closeUpgradeModal = () => {
+  showUpgradeModal.value  = false
+  upgradeError.value      = ''
+  upgradeErrors.value     = {}
+  upgradeForm.value       = { reason: '', phone: '', nationality: '', bio: '' }
+}
+
+const submitUpgrade = async () => {
+  upgradeSubmitting.value = true
+  upgradeError.value      = ''
+  upgradeErrors.value     = {}
+  try {
+    await api.post('/author-requests', upgradeForm.value)
+    showToast('Request sent successfully!')
+    closeUpgradeModal()
+    fetchRequests()
+  } catch (e) {
+    if (e.response?.status === 422) {
+      upgradeErrors.value = e.response.data.errors ?? {}
+    } else {
+      upgradeError.value = e.response?.data?.message || 'Something went wrong.'
+    }
+  } finally {
+    upgradeSubmitting.value = false
+  }
+}
+
 
 const showRejectConfirm = ref(false)
 const rejectingReq      = ref(null)
@@ -190,7 +271,7 @@ const fetchRequests = async () => {
 const handleApprove = async (req) => {
   submitting.value = req.id
   try {
-    await api.post(`/author-requests/${req.id}/approve`)
+    await api.patch(`/author-requests/${req.id}/approve`)
     showToast(`${req.applicant?.name} approved successfully`)
     fetchRequests()
   } catch (e) {
@@ -208,7 +289,7 @@ const confirmReject = (req) => {
 const handleReject = async () => {
   submitting.value = rejectingReq.value.id
   try {
-    await api.post(`/author-requests/${rejectingReq.value.id}/reject`)
+    await api.patch(`/author-requests/${rejectingReq.value.id}/reject`)
     showRejectConfirm.value = false
     showToast(`Request rejected`)
     fetchRequests()
@@ -236,6 +317,9 @@ const showToast = (message, type = 'success') => {
 }
 
 onMounted(() => fetchRequests())
+onActivated(() => {
+ fetchRequests()
+})
 </script>
 
 <style scoped>
@@ -402,6 +486,22 @@ tr:last-child td { border-bottom: none; }
 }
 .btn-danger:hover:not(:disabled) { background: #b91c1c; }
 .btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.field { margin-bottom: 14px; }
+.field label { display: block; font-size: 12px; font-weight: 500; color: #555; margin-bottom: 5px; }
+.required { color: #dc2626; }
+.field input, .field textarea {
+  width: 100%; padding: 9px 12px;
+  border: 1px solid #e0e0e0; border-radius: 8px;
+  font-size: 13px; box-sizing: border-box;
+  transition: border-color 0.15s; font-family: inherit; resize: vertical;
+}
+.field input:focus, .field textarea:focus { outline: none; border-color: #c9a96e; }
+.field-error { font-size: 11px; color: #dc2626; margin-top: 4px; display: block; }
+.form-error {
+  background: #fee2e2; color: #dc2626; padding: 8px 12px;
+  border-radius: 7px; font-size: 12px; margin-bottom: 10px;
+}
 
 /* Toast */
 .toast {

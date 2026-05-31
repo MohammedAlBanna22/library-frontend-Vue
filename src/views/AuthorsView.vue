@@ -216,9 +216,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onActivated } from 'vue'
 import api from '../services/api'
-
 // ── State ──────────────────────────────────────────────────
 const authors       = ref([])
 const loading       = ref(false)
@@ -400,6 +399,9 @@ const showToast = (message, type = 'success') => {
 
 // ── Init ───────────────────────────────────────────────────
 onMounted(() => fetchAuthors())
+onActivated(() => {
+  fetchAuthors()
+})
 </script>
 
 <style scoped>
