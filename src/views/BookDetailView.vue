@@ -93,11 +93,11 @@
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/></svg>
               Borrow Book
             </button>
-            <button class="btn-history" @click="router.push('/books/' + book.id + '/history')">
+            <!-- <button class="btn-history" @click="router.push('/books/' + book.id + '/history')">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
               History
-            </button>
-            <button class="btn-edit" @click="openEditMode">
+            </button> -->
+            <button    v-if="userRole === 'admin'" class="btn-edit" @click="openEditMode">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
               Edit
             </button>
@@ -578,7 +578,7 @@ onMounted(fetchBook)
 
 .btn-borrow {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 11px 22px; background: #141414; color: white;
+  padding: 11px 22px; background:  hsl(261, 72%, 51%); color: white;
   border: none; border-radius: 11px; font-size: 13px; font-weight: 500;
   cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s;
 }

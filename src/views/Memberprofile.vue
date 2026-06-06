@@ -124,7 +124,7 @@
             <!-- Editable Fields -->
             <div class="form-row">
               <div class="form-group">
-                <label>Membership Date <span class="req">*</span></label>
+                <label>Membership Date<span class="req">*</span></label>
                 <input
                   v-model="formData.membership_date"
                   type="date"
@@ -134,6 +134,20 @@
                 />
                 <span v-if="formErrors.membership_date" class="form-error-small">{{ formErrors.membership_date[0] }}</span>
               </div>
+
+                   <div class="form-group">
+    <label>Phone Number <span class="req">*</span></label>
+    <input
+      v-model="formData.phone"
+      type="text"
+      class="form-input"
+      :disabled="!isEditing"
+      placeholder="Enter phone number"
+    />
+  </div>
+
+
+         
 
               <div class="form-group">
                 <label>Status <span v-if="isAdmin" class="req">*</span></label>
@@ -248,7 +262,8 @@ const stats = ref({
 const formData = ref({
   address: '',
   membership_date: '',
-  status: 'active'
+  status: 'active',
+  phone: ''
 })
 
 const fetchProfile = async () => {
@@ -265,7 +280,8 @@ const fetchProfile = async () => {
     formData.value = {
       address: member.value.address || '',
       membership_date: member.value.membership_date || '',
-      status: member.value.status || 'active'
+      status: member.value.status || 'active',
+      phone: member.value.phone || ''
     }
 
     // Check if user is admin
@@ -302,7 +318,8 @@ const cancelEditing = () => {
   formData.value = {
     address: member.value.address || '',
     membership_date: member.value.membership_date || '',
-    status: member.value.status || 'active'
+    status: member.value.status || 'active',
+    phone: member.value.phone || ''
   }
   formErrors.value = {}
   submitError.value = ''
@@ -326,7 +343,8 @@ const submitForm = async () => {
     formData.value = {
       address: member.value.address || '',
       membership_date: member.value.membership_date || '',
-      status: member.value.status || 'active'
+      status: member.value.status || 'active',
+      phone: member.value.phone || ''
     }
 
     showToast('Profile updated successfully!')

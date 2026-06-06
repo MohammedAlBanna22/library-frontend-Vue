@@ -12,9 +12,11 @@ import ResetPasswordView from '../views/ResetPasswordView.vue'
 import BookDetailView from '../views/BookDetailView.vue'
 import MemberProfile from '../views/MemberProfile.vue'
 import CompleteProfileView from '../views/CompleteProfileView.vue'
+import AuthorBooks from '../views/AuthorBooksView.vue'
+import HomeView from '../views/HomeView.vue'
 
 const routes = [
-  { path: '/', redirect: '/dashboard' },
+  { path: '/', redirect: '/home' },
   { path: '/login',          name: 'Login',          component: LoginView,          meta: { guest: true } },
   { path: '/dashboard',      name: 'Dashboard',      component: DashboardView,      meta: { requiresAuth: true } },
   { path: '/books',          name: 'Books',          component: BooksView,          meta: { requiresAuth: true } },
@@ -26,7 +28,9 @@ const routes = [
   { path: '/reset-password', name: 'ResetPassword',  component: ResetPasswordView,  meta: { guest: true } },
   { path: '/profile',        name: 'MemberProfile',  component: MemberProfile,      meta: { requiresAuth: true } },
   { path: '/complete-profile', name: 'CompleteProfile', component: CompleteProfileView, meta: { requiresAuth: true } },
-  { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
+    { path: '/author-books', name: 'AuthorBooks', component: AuthorBooks, meta: { requiresAuth: true } },
+    { path: '/home', name: 'Home', component: HomeView, meta: { requiresAuth: true } },
+  { path: '/:pathMatch(.*)*', redirect: '/home' },
 ]
 
 const router = createRouter({
