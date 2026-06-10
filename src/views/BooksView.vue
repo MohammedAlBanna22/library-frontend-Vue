@@ -119,16 +119,19 @@
                   v-if="isMember"
                   class="btn-action btn-borrow"
                   @click.stop="openBorrowModal(book)"
-                  :disabled="!book.is_available"
-                  :class="{ 'is-disabled': !book.is_available }"
-                  title="Borrow this book"
+                  :disabled="!book.is_available || hasActiveBorrowing(book.id)"
+                  :class="{
+                    'is-disabled': !book.is_available,
+                    'in-progress': book.is_available && hasActiveBorrowing(book.id)
+                  }"
+                  :title="getButtonTooltip(book)"
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="16 3 21 3 21 8"/>
                     <line x1="4" y1="20" x2="21" y2="3"/>
                     <polyline points="21 16 21 21 16 21"/>
                   </svg>
-                  {{ book.is_available ? 'Borrow' : 'Not Available' }}
+                  {{ getButtonLabel(book) }}
                 </button>
 
                 <!-- EDIT - ADMIN & AUTHOR (OWN BOOK) -->
@@ -192,9 +195,18 @@
             </span>
             <span class="card-price">{{ book.price ? '$' + Number(book.price).toFixed(2) : 'Free' }}</span>
           </div>
-          <button v-if="isMember" class="btn-action btn-borrow-card" @click.stop="openBorrowModal(book)" :disabled="!book.is_available" :class="{ 'is-disabled': !book.is_available }">
+          <button
+            v-if="isMember"
+            class="btn-action btn-borrow-card"
+            @click.stop="openBorrowModal(book)"
+            :disabled="!book.is_available || hasActiveBorrowing(book.id)"
+            :class="{
+              'is-disabled': !book.is_available,
+              'in-progress': book.is_available && hasActiveBorrowing(book.id)
+            }"
+          >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/></svg>
-            {{ book.is_available ? 'Borrow Book' : 'Not Available' }}
+            {{ getButtonLabel(book) }}
           </button>
         </div>
       </div>
@@ -384,6 +396,9 @@ const sortDir      = ref('asc')
 // 👤 User
 const currentUser = ref(null)
 
+// ✨ Member's active borrowings
+const memberBorrowings = ref([])
+
 // Modal
 const showModal  = ref(false)
 const editingId  = ref(null)
@@ -426,6 +441,36 @@ const canEdit = (book) => {
   // Author can edit own books
   if (isAuthor.value && book.author?.id === currentUser.value?.id) return true
   return false
+}
+
+// ═══════════════════════════════════════════════════════════
+// CHECK ACTIVE BORROWING
+// ═══════════════════════════════════════════════════════════
+
+// ✨ تحقق من وجود استعارة نشطة للكتاب
+const hasActiveBorrowing = (bookId) => {
+  return memberBorrowings.value.some(b => {
+    // جرّب book_id أولاً، ثم book.id إذا كان book object
+    return b.book_id === bookId || b.book?.id === bookId
+  })
+}
+
+// ✨ احصل على نص الزر المناسب
+const getButtonLabel = (book) => {
+  if (!book.is_available) return 'Not Available'
+  if (hasActiveBorrowing(book.id)) return 'In Progress'
+  return 'Borrow'
+}
+
+// ✨ احصل على tooltip المناسب
+const getButtonTooltip = (book) => {
+  if (hasActiveBorrowing(book.id)) {
+    return 'You already borrowed this book. Return it first before borrowing again.'
+  }
+  if (!book.is_available) {
+    return 'This book is not available for borrowing'
+  }
+  return 'Borrow this book'
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -478,6 +523,35 @@ const fetchCurrentUser = async () => {
     currentUser.value = res.data
   } catch {
     currentUser.value = { id: null, role: 'guest' }
+  }
+}
+
+// ✨ احصل على الاستعارات النشطة للعضو الحالي
+const fetchMemberBorrowings = async () => {
+  if (!isMember.value) return
+  try {
+    const res = await api.get('/borrowings')
+    
+    let borrowings = res.data.data ?? res.data ?? []
+    
+    if (!Array.isArray(borrowings)) {
+      borrowings = []
+    }
+    
+    // احفظ فقط الاستعارات النشطة (borrowed أو overdue)
+    memberBorrowings.value = borrowings.filter(b => {
+      return b.status === 'borrowed' || b.status === 'overdue'
+    })
+    
+    console.log('✅ Member Active Borrowings:', memberBorrowings.value.map(b => ({
+      borrowing_id: b.id,
+      book_id: b.book?.id,
+      book_title: b.book?.title,
+      status: b.status
+    })))
+  } catch (error) {
+    console.error('❌ Error fetching borrowings:', error)
+    memberBorrowings.value = []
   }
 }
 
@@ -589,7 +663,7 @@ const openBorrowModal = (book) => {
   }
   errors.value = {}
   formError.value = ''
-  showBorrowModal.value = true  // ← كانت ناقصة!
+  showBorrowModal.value = true
 }
 
 const closeBorrowModal = () => {
@@ -598,8 +672,9 @@ const closeBorrowModal = () => {
 }
 
 const submitBorrow = async () => {
-     if (!borrowForm.value.borrowed_date || !borrowForm.value.due_date) {
-    formError.value = 'Please fill all fields'; return
+  if (!borrowForm.value.borrowed_date || !borrowForm.value.due_date) {
+    formError.value = 'Please fill all fields'
+    return
   }
   submitting.value = true
   try {
@@ -610,10 +685,14 @@ const submitBorrow = async () => {
     })
     closeBorrowModal()
     showToast('Book borrowed successfully!')
-    fetchBooks(currentPage.value)   // ✅ correct
+    // ✨ حدّث الاستعارات النشطة بعد الاستعارة الناجحة
+    await fetchMemberBorrowings()
+    await fetchBooks(currentPage.value)
   } catch (e) {
     formError.value = e.response?.data?.message || 'Failed to borrow book'
-  } finally { submitting.value = false }
+  } finally {
+    submitting.value = false
+  }
 }
 
 const confirmDelete = (book) => {
@@ -644,11 +723,13 @@ const showToast = (message, type = 'success') => {
 onMounted(async () => {
   await fetchCurrentUser()
   await fetchBooks(1)
+  await fetchMemberBorrowings()  // ✨ احصل على الاستعارات النشطة
   await fetchAuthors()
 })
 
 onActivated(() => {
   fetchBooks(currentPage.value)
+  fetchMemberBorrowings()  // ✨ حدّث الاستعارات عند العودة للصفحة
 })
 </script>
 
@@ -784,6 +865,11 @@ tr:last-child td { border-bottom: none; }
 .btn-borrow:hover:not(:disabled) { background: #4f46e5; transform: translateY(-1px); }
 .btn-borrow:disabled,
 .btn-borrow.is-disabled { background: #d1d5db; cursor: not-allowed; opacity: 0.6; }
+.btn-borrow.in-progress:disabled {
+  background: #16a34a;
+  color: white;
+  opacity: 1;
+}
 
 .btn-borrow-card {
   width: 100%;
@@ -805,6 +891,11 @@ tr:last-child td { border-bottom: none; }
 .btn-borrow-card:hover:not(:disabled) { background: #4f46e5; transform: translateY(-2px); }
 .btn-borrow-card:disabled,
 .btn-borrow-card.is-disabled { background: #d1d5db; cursor: not-allowed; opacity: 0.6; }
+.btn-borrow-card.in-progress:disabled {
+  background: #16a34a;
+  color: white;
+  opacity: 1;
+}
 
 .cards-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));

@@ -2,16 +2,15 @@
   <div class="app-root">
     <!-- Sidebar: تظهر بس لما يكون مسجل دخول -->
     <aside v-if="isAuthenticated" class="sidebar">
-      <div class="brand">
+      <RouterLink to="/home" class="brand">
         <div class="brand-icon">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
             <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
           </svg>
         </div>
-        <span class="brand-name"> Library</span>
-       
-      </div>
+        <span class="brand-name">Library</span>
+      </RouterLink>
 
       <nav class="nav">
 
@@ -23,7 +22,7 @@
           </svg>
           <span>Home</span>
         </RouterLink>
-        <RouterLink v-if="userRole == 'admin'|| userRole === 'author'" to="/dashboard" class="nav-item" active-class="active">
+        <RouterLink  to="/dashboard" class="nav-item" active-class="active">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
           <span>Dashboard</span>
         </RouterLink>
@@ -64,7 +63,7 @@
   <span>Author Books</span>
 </RouterLink>
 
-        <RouterLink v-if="userRole === 'member' " to="/author-requests" class="nav-item" active-class="active">
+        <RouterLink v-if="userRole === 'member' || userRole === 'admin' " to="/author-requests" class="nav-item" active-class="active">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
           <span>Author Requests</span>
           <span v-if="pendingCount > 0" class="nav-badge">{{ pendingCount }}</span>
@@ -112,7 +111,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from './services/api'
 
-const router   = useRouter()
+const router = useRouter()
 const userName = ref(localStorage.getItem('userName') || 'Admin')
 const userInitial = computed(() => userName.value.charAt(0).toUpperCase())
 const userRole = ref(localStorage.getItem('userRole') || 'member')
@@ -130,10 +129,19 @@ const fetchPending = async () => {
 
 const logout = () => {
   localStorage.removeItem('token')
-  router.push('/login')
+  localStorage.removeItem('userName')
+  localStorage.removeItem('userRole')
+  // ✨ إعادة تحميل الصفحة لتنظيف sidebar
+  window.location.href = '/login'
 }
 
-onMounted(() => fetchPending())
+onMounted(() => {
+  // عند تحميل المكون، البيانات موجودة بالفعل في localStorage من login
+  // لأن login يستخدم window.location.href الذي يعيد تحميل الصفحة
+  if (isAuthenticated.value) {
+    fetchPending()
+  }
+})
 </script>
 
 <style>
@@ -169,19 +177,39 @@ body {
 }
 
 .brand {
-  display: flex; align-items: center; gap: 10px;
-  padding: 0 8px; margin-bottom: 36px;
+  display: flex; 
+  align-items: center; 
+  gap: 10px;
+  padding: 8px;
+  margin-bottom: 36px;
+  text-decoration: none;
+  border-radius: 10px;
+  transition: all 0.2s;
+  cursor: pointer;
 }
+
+.brand:hover {
+  background: #222;
+}
+
 .brand-icon {
-  width: 36px; height: 36px;
+  width: 36px; 
+  height: 36px;
   background: #c9a96e;
   border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
+  display: flex; 
+  align-items: center; 
+  justify-content: center;
   color: #141414;
+  flex-shrink: 0;
 }
+
 .brand-name {
   font-family: 'Playfair Display', serif;
-  font-size: 20px; color: #f5f0e8; letter-spacing: 0.5px;
+  font-size: 20px; 
+  color: #f5f0e8; 
+  letter-spacing: 0.5px;
+  font-weight: 600;
 }
 
 .nav { display: flex; flex-direction: column; gap: 4px; flex: 1; }

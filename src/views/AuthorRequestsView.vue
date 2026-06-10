@@ -6,7 +6,8 @@
         <h1 class="page-title">Author Requests</h1>
         <span class="page-sub">{{ total }} request{{ total !== 1 ? 's' : '' }} total</span>
       </div>
-      <button class="btn-primary" @click="showUpgradeModal = true">
+      <!-- Only visible to members -->
+      <button v-if="currentUser?.role === 'member'" class="btn-primary" @click="showUpgradeModal = true">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
         Upgrade to Author
       </button>
@@ -46,8 +47,8 @@
       <p>No {{ filterStatus === 'all' ? '' : filterStatus }} requests found</p>
     </div>
 
-    <!-- Table -->
-    <div v-else class="table-wrap">
+    <!-- Admin Table -->
+    <div v-else-if="isAdmin" class="table-wrap">
       <table>
         <thead>
           <tr>
@@ -93,6 +94,28 @@
                 </button>
               </div>
               <span v-else class="text-muted">—</span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Member Table (own requests only) -->
+    <div v-else class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Reason</th>
+            <th>Date</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="req in filteredRequests" :key="req.id" class="table-row">
+            <td class="reason-cell">{{ req.reason || '—' }}</td>
+            <td class="date-cell">{{ formatDate(req.created_at) }}</td>
+            <td>
+              <span class="badge" :class="req.status">{{ req.status }}</span>
             </td>
           </tr>
         </tbody>
@@ -179,13 +202,27 @@
 import { ref, computed, onMounted, onActivated } from 'vue'
 import api from '../services/api'
 
-const requests   = ref([])
-const loading    = ref(false)
-const search     = ref('')
+const requests     = ref([])
+const loading      = ref(false)
+const search       = ref('')
 const filterStatus = ref('pending')
-const submitting = ref(null)
-const total      = ref(0)
+const submitting   = ref(null)
+const total        = ref(0)
 
+// ── Current user ───────────────────────────────────────────────────────────
+const currentUser = ref(null)
+const isAdmin     = computed(() => currentUser.value?.role === 'admin')
+
+const fetchCurrentUser = async () => {
+  try {
+    const res = await api.get('/auth/me')
+    currentUser.value = res.data
+  } catch {
+    // unauthenticated or token expired — handle upstream
+  }
+}
+
+// ── Upgrade modal ──────────────────────────────────────────────────────────
 const showUpgradeModal  = ref(false)
 const upgradeSubmitting = ref(false)
 const upgradeError      = ref('')
@@ -193,10 +230,10 @@ const upgradeErrors     = ref({})
 const upgradeForm       = ref({ reason: '', phone: '', nationality: '', bio: '' })
 
 const closeUpgradeModal = () => {
-  showUpgradeModal.value  = false
-  upgradeError.value      = ''
-  upgradeErrors.value     = {}
-  upgradeForm.value       = { reason: '', phone: '', nationality: '', bio: '' }
+  showUpgradeModal.value = false
+  upgradeError.value     = ''
+  upgradeErrors.value    = {}
+  upgradeForm.value      = { reason: '', phone: '', nationality: '', bio: '' }
 }
 
 const submitUpgrade = async () => {
@@ -219,13 +256,15 @@ const submitUpgrade = async () => {
   }
 }
 
-
+// ── Reject modal ───────────────────────────────────────────────────────────
 const showRejectConfirm = ref(false)
 const rejectingReq      = ref(null)
 
+// ── Toast ──────────────────────────────────────────────────────────────────
 const toast = ref({ show: false, message: '', type: 'success' })
 let toastTimer = null
 
+// ── Tabs ───────────────────────────────────────────────────────────────────
 const tabs = [
   { label: 'Pending',  value: 'pending'  },
   { label: 'Approved', value: 'approved' },
@@ -254,11 +293,15 @@ const filteredRequests = computed(() => {
   return list
 })
 
+// ── Fetch requests ─────────────────────────────────────────────────────────
+// Admin  → GET /author-requests       returns all requests with applicant + author_profile
+// Member → GET /author-requests/me    returns only own requests (id, reason, status, created_at)
 const fetchRequests = async () => {
   loading.value = true
   try {
-    const res = await api.get('/author-requests')
-    const data = res.data
+    const endpoint = isAdmin.value ? '/author-requests' : '/author-requests/me'
+    const res      = await api.get(endpoint)
+    const data     = res.data
     requests.value = data.data ?? data
     total.value    = requests.value.length
   } catch (e) {
@@ -268,6 +311,7 @@ const fetchRequests = async () => {
   }
 }
 
+// ── Admin actions ──────────────────────────────────────────────────────────
 const handleApprove = async (req) => {
   submitting.value = req.id
   try {
@@ -282,7 +326,7 @@ const handleApprove = async (req) => {
 }
 
 const confirmReject = (req) => {
-  rejectingReq.value    = req
+  rejectingReq.value      = req
   showRejectConfirm.value = true
 }
 
@@ -291,7 +335,7 @@ const handleReject = async () => {
   try {
     await api.patch(`/author-requests/${rejectingReq.value.id}/reject`)
     showRejectConfirm.value = false
-    showToast(`Request rejected`)
+    showToast('Request rejected')
     fetchRequests()
   } catch (e) {
     showToast(e.response?.data?.message || 'Failed to reject', 'error')
@@ -300,6 +344,7 @@ const handleReject = async () => {
   }
 }
 
+// ── Helpers ────────────────────────────────────────────────────────────────
 const initials = (name) => {
   if (!name) return '?'
   return name.trim().split(' ').slice(0, 2).map(w => w[0].toUpperCase()).join('')
@@ -316,9 +361,16 @@ const showToast = (message, type = 'success') => {
   toastTimer  = setTimeout(() => { toast.value.show = false }, 3000)
 }
 
-onMounted(() => fetchRequests())
-onActivated(() => {
- fetchRequests()
+// ── Lifecycle ──────────────────────────────────────────────────────────────
+// fetchCurrentUser must resolve first so isAdmin is correct before fetchRequests runs
+onMounted(async () => {
+  await fetchCurrentUser()
+  await fetchRequests()
+})
+
+onActivated(async () => {
+  await fetchCurrentUser()
+  await fetchRequests()
 })
 </script>
 
@@ -442,6 +494,15 @@ tr:last-child td { border-bottom: none; }
 .action-btn.approve:hover:not(:disabled) { background: #bbf7d0; }
 .action-btn.reject  { background: #fee2e2; color: #991b1b; }
 .action-btn.reject:hover:not(:disabled)  { background: #fecaca; }
+
+/* Buttons */
+.btn-primary {
+  display: flex; align-items: center; gap: 7px;
+  padding: 10px 18px; background: #141414; color: white;
+  border: none; border-radius: 10px; font-size: 13px;
+  font-weight: 500; cursor: pointer; transition: background 0.15s;
+}
+.btn-primary:hover { background: #2a2a2a; }
 
 /* Modal */
 .modal-backdrop {

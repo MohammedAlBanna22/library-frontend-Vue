@@ -112,28 +112,40 @@ const forgotEmail = ref('')
 const clearMessages = () => { error.value = ''; success.value = '' }
 
 const login = async () => {
-  clearMessages(); loading.value = true
+  clearMessages()
+  loading.value = true
   try {
     const res = await api.post('/auth/login', loginForm.value)
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('userName', res.data.user?.name || 'Admin')
     localStorage.setItem('userRole', res.data.user?.role || 'member')
-    router.push('/dashboard')
+    
+    // ✨ أعد تحميل الصفحة لتحديث Sidebar تلقائياً مع بيانات المستخدم الجديد
+    window.location.href = '/dashboard'
+    
   } catch (e) {
     error.value = e.response?.data?.message || 'Invalid email or password'
-  } finally { loading.value = false }
+    loading.value = false
+  }
 }
 
 const register = async () => {
-  clearMessages(); loading.value = true
+  clearMessages()
+  loading.value = true
   if (registerForm.value.password !== registerForm.value.password_confirmation) {
-    error.value = 'Passwords do not match'; loading.value = false; return
+    error.value = 'Passwords do not match'
+    loading.value = false
+    return
   }
   try {
     const res = await api.post('/auth/register', registerForm.value)
     localStorage.setItem('token', res.data.token)
     localStorage.setItem('userName', res.data.user?.name || 'Admin')
-    router.push('/complete-profile')
+    localStorage.setItem('userRole', res.data.user?.role || 'member')
+    
+    // ✨ أعد تحميل الصفحة بعد التسجيل
+    window.location.href = '/complete-profile'
+    
   } catch (e) {
     const errors = e.response?.data?.errors
     if (errors) {
@@ -141,18 +153,22 @@ const register = async () => {
     } else {
       error.value = e.response?.data?.message || 'Registration failed'
     }
-  } finally { loading.value = false }
+    loading.value = false
+  }
 }
 
 const forgotPassword = async () => {
-  clearMessages(); loading.value = true
+  clearMessages()
+  loading.value = true
   try {
     await api.post('/auth/forgot-password', { email: forgotEmail.value })
     success.value = 'Reset link sent! Check your email.'
     forgotEmail.value = ''
+    loading.value = false
   } catch (e) {
     error.value = e.response?.data?.message || 'Failed to send reset link'
-  } finally { loading.value = false }
+    loading.value = false
+  }
 }
 </script>
 

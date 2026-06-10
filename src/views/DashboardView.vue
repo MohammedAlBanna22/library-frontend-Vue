@@ -255,7 +255,7 @@
          MEMBER DASHBOARD
     ════════════════════════════════════ -->
     <template v-else-if="userRole === 'member'">
-      <div class="stats-grid">
+      <div class="stats-grid member-stats">
         <div class="stat-card blue">
           <div class="stat-icon">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 3 21 3 21 8"/><line x1="4" y1="20" x2="21" y2="3"/><polyline points="21 16 21 21 16 21"/></svg>
@@ -281,15 +281,6 @@
           <div class="stat-body">
             <span class="stat-label">Returned</span>
             <span class="stat-value">{{ memberLoading ? '...' : memberReturned }}</span>
-          </div>
-        </div>
-        <div class="stat-card amber">
-          <div class="stat-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          </div>
-          <div class="stat-body">
-            <span class="stat-label">Available Books</span>
-            <span class="stat-value">{{ statsLoading ? '...' : stats.total_books }}</span>
           </div>
         </div>
       </div>
@@ -489,6 +480,7 @@ onMounted(async () => {
 
 /* Stats */
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 28px; }
+.stats-grid.member-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .stat-card {
   background: white; border-radius: 18px; padding: 26px 22px;
   display: flex; align-items: center; gap: 18px;

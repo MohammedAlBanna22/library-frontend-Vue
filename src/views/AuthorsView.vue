@@ -6,10 +6,15 @@
         <h1 class="page-title">Authors</h1>
         <span class="page-sub">{{ total }} author{{ total !== 1 ? 's' : '' }} total</span>
       </div>
-      <button class="btn-primary" @click="$router.push('/author-requests')">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        Author Requests
-      </button>
+      <div class="header-actions">
+        <button class="btn-primary" @click="openCreate">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add Author
+        </button>
+        <button class="btn-secondary" @click="$router.push('/author-requests')">
+          Author Requests
+        </button>
+      </div>
     </div>
 
     <!-- Toolbar -->
@@ -66,8 +71,8 @@
             <th>Nationality</th>
             <th>Phone</th>
             <th>Bio</th>
-            <th @click="sortBy('books_count')" class="sortable">
-              Books <span class="sort-icon">{{ sortField === 'books_count' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
+            <th @click="sortBy('books')" class="sortable">
+              Books <span class="sort-icon">{{ sortField === 'books' ? (sortDir === 'asc' ? '↑' : '↓') : '↕' }}</span>
             </th>
             <th>Actions</th>
           </tr>
@@ -87,7 +92,7 @@
             <td>{{ author.phone || '—' }}</td>
             <td class="bio-cell">{{ author.bio || '—' }}</td>
             <td>
-              <span class="books-count">{{ author.books_count ?? 0 }}</span>
+              <span class="books-count">{{ authorBooksCount(author) }}</span>
             </td>
             <td>
               <div class="actions">
@@ -122,7 +127,7 @@
         <span v-if="author.nationality" class="nationality-badge">{{ author.nationality }}</span>
         <p class="card-bio">{{ author.bio || 'No bio available.' }}</p>
         <div class="card-footer">
-          <span class="books-count-label">{{ author.books_count ?? 0 }} books</span>
+          <span class="books-count-label">{{ authorBooksCount(author) }} books</span>
         </div>
       </div>
     </div>
@@ -146,10 +151,22 @@
           </div>
 
           <form @submit.prevent="submitForm" class="modal-body">
-            <div class="field">
+            <div v-if="editingId" class="field">
               <label>Name <span class="required">*</span></label>
               <input v-model="form.name" type="text" placeholder="Author full name" required />
               <span v-if="errors.name" class="field-error">{{ errors.name[0] }}</span>
+            </div>
+
+            <div v-else class="field">
+              <label>Member <span class="required">*</span></label>
+              <select v-model.number="form.user_id" :disabled="membersLoading" required>
+                <option value="">{{ membersLoading ? 'Loading members...' : 'Choose member...' }}</option>
+                <option v-for="member in members" :key="member.id" :value="member.user_id">
+                  {{ member.name }}{{ member.email ? ' - ' + member.email : '' }}{{ member.phone ? ' - ' + member.phone : '' }}
+                </option>
+              </select>
+              <span v-if="errors.user_id" class="field-error">{{ errors.user_id[0] }}</span>
+              <span v-else-if="!membersLoading && !members.length" class="field-hint">No members available to add as authors.</span>
             </div>
 
             <div class="field">
@@ -159,8 +176,8 @@
             </div>
 
             <div class="field">
-              <label>Phone</label>
-              <input v-model="form.phone" type="text" placeholder="e.g. +970599123456" />
+              <label>Phone <span class="required">*</span></label>
+              <input v-model="form.phone" type="text" placeholder="e.g. +970599123456" required />
               <span v-if="errors.phone" class="field-error">{{ errors.phone[0] }}</span>
             </div>
 
@@ -230,6 +247,9 @@ const lastPage      = ref(1)
 const total         = ref(0)
 const sortField     = ref('name')
 const sortDir       = ref('asc')
+const currentUser   = ref(null)
+const members       = ref([])
+const membersLoading = ref(false)
 
 // Modal
 const showModal   = ref(false)
@@ -237,7 +257,7 @@ const editingId   = ref(null)
 const submitting  = ref(false)
 const formError   = ref('')
 const errors      = ref({})
-const form        = ref({ name: '', nationality: '', bio: '' })
+const form        = ref({ user_id: '', name: '', nationality: '', bio: '', phone: '' })
 
 // Delete
 const showDeleteConfirm = ref(false)
@@ -270,12 +290,14 @@ const filteredAuthors = computed(() => {
 
 const sortedAuthors = computed(() => {
   return [...filteredAuthors.value].sort((a, b) => {
-    const aVal = a[sortField.value] ?? ''
-    const bVal = b[sortField.value] ?? ''
+    const aVal = sortField.value === 'books' ? authorBooksCount(a) : (a[sortField.value] ?? '')
+    const bVal = sortField.value === 'books' ? authorBooksCount(b) : (b[sortField.value] ?? '')
     const cmp = String(aVal).localeCompare(String(bVal), undefined, { numeric: true })
     return sortDir.value === 'asc' ? cmp : -cmp
   })
 })
+
+const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
 // ── Methods ────────────────────────────────────────────────
 const fetchAuthors = async () => {
@@ -304,6 +326,51 @@ const fetchAuthors = async () => {
   }
 }
 
+const fetchCurrentUser = async () => {
+  try {
+    const res = await api.get('/auth/me')
+    currentUser.value = res.data?.data || res.data?.user || res.data
+  } catch {
+    currentUser.value = null
+  }
+}
+
+const normalizeList = (payload) => {
+  if (Array.isArray(payload)) return payload
+  if (Array.isArray(payload?.data)) return payload.data
+  if (Array.isArray(payload?.users)) return payload.users
+  if (Array.isArray(payload?.members)) return payload.members
+  return []
+}
+
+const fetchMembers = async () => {
+  if (membersLoading.value) return
+  membersLoading.value = true
+  try {
+    const res = await api.get('/members')
+    const list = normalizeList(res.data)
+
+    members.value = list
+      .map(member => {
+        const user = member.user || member.user_data || member.account || {}
+        const userId = member.user_id || user.id || member.id
+        return {
+          id: member.id,
+          user_id: userId,
+          name: user.name || member.name || member.user_name || member.member_name || (userId ? `User #${userId}` : `Member #${member.id}`),
+          email: user.email || member.email || '',
+          phone: member.phone || ''
+        }
+      })
+      .filter(member => member.user_id)
+  } catch {
+    members.value = []
+    showToast('Failed to load members', 'error')
+  } finally {
+    membersLoading.value = false
+  }
+}
+
 // السيرش فوري بدون API call
 const onSearch = () => {}
 const clearSearch = () => { search.value = '' }
@@ -324,18 +391,26 @@ const initials = (name) => {
   return name.trim().split(' ').slice(0, 2).map(w => w[0].toUpperCase()).join('')
 }
 
+const authorBooksCount = (author) => {
+  if (typeof author.books === 'number') return author.books
+  if (Array.isArray(author.books)) return author.books.length
+  if (typeof author.books_count === 'number') return author.books_count
+  return 0
+}
+
 // ── Modal ──────────────────────────────────────────────────
-const openCreate = () => {
+const openCreate = async () => {
   editingId.value = null
-  form.value      = { name: '', nationality: '', bio: '', phone: '' }
+  form.value      = { user_id: '', name: '', nationality: '', bio: '', phone: '' }
   errors.value    = {}
   formError.value = ''
   showModal.value = true
+  if (!members.value.length) await fetchMembers()
 }
 
 const openEdit = (author) => {
   editingId.value = author.id
-  form.value      = { name: author.name ?? '', nationality: author.nationality ?? '', bio: author.bio ?? '', phone: author.phone ?? '' }
+  form.value      = { user_id: '', name: author.name ?? '', nationality: author.nationality ?? '', bio: author.bio ?? '', phone: author.phone ?? '' }
   errors.value    = {}
   formError.value = ''
   showModal.value = true
@@ -351,10 +426,22 @@ const submitForm = async () => {
   formError.value  = ''
   try {
     if (editingId.value) {
-      await api.put(`/authors/${editingId.value}`, form.value)
+      const payload = {
+        name: form.value.name,
+        nationality: form.value.nationality,
+        bio: form.value.bio,
+        phone: form.value.phone
+      }
+      await api.put(`/authors/${editingId.value}`, payload)
       showToast('Author updated successfully')
     } else {
-      await api.post('/authors', form.value)
+      const payload = {
+        user_id: form.value.user_id,
+        nationality: form.value.nationality,
+        bio: form.value.bio,
+        phone: form.value.phone
+      }
+      await api.post('/authors', payload)
       showToast('Author added successfully')
     }
     closeModal()
@@ -398,9 +485,14 @@ const showToast = (message, type = 'success') => {
 }
 
 // ── Init ───────────────────────────────────────────────────
-onMounted(() => fetchAuthors())
+onMounted(async () => {
+  await fetchCurrentUser()
+  await fetchAuthors()
+  fetchMembers()
+})
 onActivated(() => {
   fetchAuthors()
+  fetchMembers()
 })
 </script>
 
@@ -417,6 +509,13 @@ onActivated(() => {
   font-size: 26px; font-weight: 600; color: #141414; margin: 0;
 }
 .page-sub { font-size: 13px; color: #888; margin-top: 2px; display: block; }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
 
 /* Toolbar */
 .toolbar {
@@ -631,16 +730,17 @@ tr:last-child td { border-bottom: none; }
   color: #555; margin-bottom: 5px;
 }
 .required { color: #dc2626; }
-.field input, .field textarea {
+.field input, .field select, .field textarea {
   width: 100%; padding: 9px 12px;
   border: 1px solid #e0e0e0; border-radius: 8px;
   font-size: 13px; box-sizing: border-box;
   transition: border-color 0.15s; font-family: inherit; resize: vertical;
 }
-.field input:focus, .field textarea:focus {
+.field input:focus, .field select:focus, .field textarea:focus {
   outline: none; border-color: #c9a96e;
 }
 .field-error { font-size: 11px; color: #dc2626; margin-top: 4px; display: block; }
+.field-hint { font-size: 11px; color: #888; margin-top: 4px; display: block; }
 .form-error {
   background: #fee2e2; color: #dc2626; padding: 8px 12px;
   border-radius: 7px; font-size: 12px; margin-bottom: 10px;

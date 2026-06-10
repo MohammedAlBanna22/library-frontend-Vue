@@ -31,7 +31,7 @@
         <!-- Header -->
         <div class="profile-header">
           <div class="profile-avatar">
-            {{ initial(member.name) }}
+            {{ initial(member.user?.name) }}
           </div>
           <div class="profile-info">
             <h1 class="profile-name">{{ member.user?.name }}</h1>
@@ -41,9 +41,9 @@
             </span>
           </div>
           <div class="profile-actions">
-            <button 
+            <button
               v-if="!isEditing"
-              @click="startEditing" 
+              @click="startEditing"
               class="btn-edit"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -52,9 +52,9 @@
               </svg>
               Edit Profile
             </button>
-            <button 
+            <button
               v-else
-              @click="cancelEditing" 
+              @click="cancelEditing"
               class="btn-cancel"
             >
               Cancel
@@ -78,7 +78,7 @@
           </div>
           <div class="stat-card">
             <div class="stat-label">Member Since</div>
-            <div class="stat-value-date">{{ formatDate(member.created_at) }}</div>
+            <div class="stat-value-date">{{ formatDate(member.membership_date) }}</div>
           </div>
         </div>
 
@@ -86,7 +86,7 @@
         <div class="form-section">
           <h2 class="section-title">Profile Information</h2>
 
-          <!-- Error Messages -->
+          <!-- Alerts -->
           <div v-if="successMessage" class="alert alert-success">
             {{ successMessage }}
           </div>
@@ -96,7 +96,7 @@
 
           <!-- Form -->
           <form @submit.prevent="submitForm" class="profile-form">
-            <!-- User Info (Read-only) -->
+            <!-- Read-only: Name & Email -->
             <div class="form-row">
               <div class="form-group">
                 <label>Full Name</label>
@@ -121,45 +121,48 @@
               </div>
             </div>
 
-            <!-- Editable Fields -->
+            <!-- Read-only: Membership Date & Status -->
             <div class="form-row">
               <div class="form-group">
-                <label>Membership Date<span class="req">*</span></label>
+                <label>Membership Date</label>
                 <input
-                  v-model="formData.membership_date"
+                  :value="formData.membership_date"
                   type="date"
                   class="form-input"
-                  :disabled="!isEditing"
-                  required
+                  disabled
                 />
-                <span v-if="formErrors.membership_date" class="form-error-small">{{ formErrors.membership_date[0] }}</span>
+                <span class="form-hint">Contact admin to change membership date</span>
               </div>
 
-                   <div class="form-group">
-    <label>Phone Number <span class="req">*</span></label>
-    <input
-      v-model="formData.phone"
-      type="text"
-      class="form-input"
-      :disabled="!isEditing"
-      placeholder="Enter phone number"
-    />
-  </div>
-
-
-         
-
               <div class="form-group">
-                <label>Status <span v-if="isAdmin" class="req">*</span></label>
+                <label>Status</label>
                 <select
                   v-model="formData.status"
                   class="form-input"
-                  :disabled="!isEditing || !isAdmin"
+                  disabled
                 >
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </select>
-                <span v-if="!isAdmin" class="form-hint">Only admins can change status</span>
+                <span class="form-hint">Only admins can change status</span>
+              </div>
+            </div>
+
+            <!-- Editable: Phone & Address -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>
+                  Phone Number
+                  <span v-if="isEditing" class="req">*</span>
+                </label>
+                <input
+                  v-model="formData.phone"
+                  type="text"
+                  class="form-input"
+                  :disabled="!isEditing"
+                  placeholder="Enter phone number"
+                />
+                <span v-if="formErrors.phone" class="form-error-small">{{ formErrors.phone[0] }}</span>
               </div>
             </div>
 
@@ -177,7 +180,7 @@
 
             <!-- Submit Buttons -->
             <div v-if="isEditing" class="form-actions">
-              <button 
+              <button
                 type="button"
                 @click="cancelEditing"
                 class="btn-secondary"
@@ -185,7 +188,7 @@
               >
                 Discard Changes
               </button>
-              <button 
+              <button
                 type="submit"
                 class="btn-primary"
                 :disabled="isSubmitting"
@@ -209,10 +212,9 @@
               <span class="info-value">{{ member.user?.name }}</span>
             </div>
             <div class="info-item">
-            <span class="info-label">Phone Number</span>
-            <span class="info-value">{{ member.phone || '—' }}</span>
+              <span class="info-label">Phone Number</span>
+              <span class="info-value">{{ member.phone || '—' }}</span>
             </div>
-            
             <div class="info-item">
               <span class="info-label">Membership Date</span>
               <span class="info-value">{{ formatDate(member.membership_date) }}</span>
@@ -236,7 +238,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import api from '@/services/api'
 
@@ -249,7 +251,6 @@ const isSubmitting = ref(false)
 const successMessage = ref('')
 const submitError = ref('')
 const formErrors = ref({})
-const isAdmin = ref(false)
 
 const toast = ref({ show: false, message: '', type: 'success' })
 
@@ -270,13 +271,9 @@ const fetchProfile = async () => {
   loading.value = true
   error.value = ''
   try {
-    // Get current user's member profile
     const res = await api.get('/members/me')
     member.value = res.data.data || res.data
-    
-    console.log('Member data:', member.value)
-    
-    // Pre-fill form
+
     formData.value = {
       address: member.value.address || '',
       membership_date: member.value.membership_date || '',
@@ -284,9 +281,9 @@ const fetchProfile = async () => {
       phone: member.value.phone || ''
     }
 
-    // Check if user is admin
-    checkAdminStatus()
-    
+    // Fetch borrowing stats
+    await fetchBorrowingStats()
+
   } catch (e) {
     console.error('Profile fetch error:', e)
     if (e.response?.status === 404) {
@@ -299,22 +296,35 @@ const fetchProfile = async () => {
   }
 }
 
-const checkAdminStatus = async () => {
+const fetchBorrowingStats = async () => {
   try {
-    const res = await api.get('/user')
-    isAdmin.value = res.data.data?.role === 'admin' || res.data.role === 'admin'
+    const res = await api.get('/borrowings')
+    const borrowings = res.data.data || res.data || []
+    
+    if (!Array.isArray(borrowings)) {
+      console.warn('Borrowings not array')
+      return
+    }
+
+    // Calculate stats exactly like Dashboard
+    stats.value.totalBorrowed = borrowings.length
+    stats.value.currentlyBorrowed = borrowings.filter(b => b.status === 'borrowed').length
+    stats.value.overdueBooks = borrowings.filter(b => b.status === 'overdue').length
+    
+    console.log('✅ Stats:', stats.value)
   } catch (e) {
-    console.error('Admin check error:', e)
+    console.error('Borrowing stats error:', e)
   }
 }
 
 const startEditing = () => {
   formErrors.value = {}
+  successMessage.value = ''
+  submitError.value = ''
   isEditing.value = true
 }
 
 const cancelEditing = () => {
-  // Reset form to original values
   formData.value = {
     address: member.value.address || '',
     membership_date: member.value.membership_date || '',
@@ -334,12 +344,15 @@ const submitForm = async () => {
   successMessage.value = ''
 
   try {
-    const response = await api.patch('/members/me', formData.value)
-    
+    // Only send the two editable fields
+    const response = await api.patch('/members/me', {
+      address: formData.value.address,
+      phone: formData.value.phone,
+    })
+
     member.value = response.data.data || response.data
-    successMessage.value = 'Profile updated successfully!'
-    
-    // Update form values
+
+    // Sync form with returned data (keep membership_date & status from original)
     formData.value = {
       address: member.value.address || '',
       membership_date: member.value.membership_date || '',
@@ -347,6 +360,7 @@ const submitForm = async () => {
       phone: member.value.phone || ''
     }
 
+    successMessage.value = 'Profile updated successfully!'
     showToast('Profile updated successfully!')
     isEditing.value = false
 
@@ -433,9 +447,7 @@ onMounted(fetchProfile)
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
 .btn-retry {
@@ -451,9 +463,7 @@ onMounted(fetchProfile)
   font-family: 'DM Sans', sans-serif;
 }
 
-.btn-retry:hover {
-  background: #2d2d2d;
-}
+.btn-retry:hover { background: #2d2d2d; }
 
 /* Profile Container */
 .profile-container {
@@ -467,7 +477,7 @@ onMounted(fetchProfile)
   background: white;
   border-radius: 20px;
   padding: 32px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   display: flex;
   align-items: center;
   gap: 24px;
@@ -516,20 +526,10 @@ onMounted(fetchProfile)
   width: fit-content;
 }
 
-.profile-status.active {
-  background: #dcfce7;
-  color: #16a34a;
-}
+.profile-status.active  { background: #dcfce7; color: #16a34a; }
+.profile-status.inactive { background: #fee2e2; color: #dc2626; }
 
-.profile-status.inactive {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.profile-actions {
-  display: flex;
-  gap: 8px;
-}
+.profile-actions { display: flex; gap: 8px; }
 
 .btn-edit,
 .btn-cancel {
@@ -548,18 +548,9 @@ onMounted(fetchProfile)
   transition: all 0.2s;
 }
 
-.btn-edit:hover {
-  background: #2d2d2d;
-}
-
-.btn-cancel {
-  background: #f0f0f0;
-  color: #333;
-}
-
-.btn-cancel:hover {
-  background: #e5e5e5;
-}
+.btn-edit:hover  { background: #2d2d2d; }
+.btn-cancel      { background: #f0f0f0; color: #333; }
+.btn-cancel:hover { background: #e5e5e5; }
 
 /* Stats Grid */
 .stats-grid {
@@ -572,40 +563,23 @@ onMounted(fetchProfile)
   background: white;
   border-radius: 16px;
   padding: 20px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.stat-label {
-  font-size: 12px;
-  color: #888;
-  font-weight: 500;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 600;
-  color: #141414;
-}
-
-.stat-value.danger {
-  color: #dc2626;
-}
-
-.stat-value-date {
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-}
+.stat-label     { font-size: 12px; color: #888; font-weight: 500; }
+.stat-value     { font-size: 28px; font-weight: 600; color: #141414; }
+.stat-value.danger { color: #dc2626; }
+.stat-value-date { font-size: 14px; color: #333; font-weight: 500; }
 
 /* Form Section */
 .form-section {
   background: white;
   border-radius: 20px;
   padding: 32px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .section-title {
@@ -639,9 +613,7 @@ onMounted(fetchProfile)
   color: #444;
 }
 
-.req {
-  color: #dc2626;
-}
+.req { color: #dc2626; }
 
 .form-input {
   border: 1px solid #e5e5e5;
@@ -707,14 +679,8 @@ textarea.form-input {
   transition: all 0.2s;
 }
 
-.btn-primary:hover:not(:disabled) {
-  background: #2d2d2d;
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.btn-primary:hover:not(:disabled) { background: #2d2d2d; }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .btn-secondary {
   background: #f0f0f0;
@@ -729,14 +695,8 @@ textarea.form-input {
   transition: all 0.2s;
 }
 
-.btn-secondary:hover:not(:disabled) {
-  background: #e5e5e5;
-}
-
-.btn-secondary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
+.btn-secondary:hover:not(:disabled) { background: #e5e5e5; }
+.btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }
 
 /* Alerts */
 .alert {
@@ -746,24 +706,15 @@ textarea.form-input {
   margin-bottom: 16px;
 }
 
-.alert-success {
-  background: #dcfce7;
-  color: #16a34a;
-  border: 1px solid #bbf7d0;
-}
-
-.alert-error {
-  background: #fee2e2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-}
+.alert-success { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+.alert-error   { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
 
 /* Additional Info */
 .additional-info {
   background: white;
   border-radius: 20px;
   padding: 32px;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
 
 .info-grid {
@@ -778,30 +729,11 @@ textarea.form-input {
   gap: 6px;
 }
 
-.info-label {
-  font-size: 12px;
-  color: #888;
-  font-weight: 500;
-}
-
-.info-value {
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-}
-
-.info-value.mono {
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.text-green {
-  color: #16a34a !important;
-}
-
-.text-red {
-  color: #dc2626 !important;
-}
+.info-label { font-size: 12px; color: #888; font-weight: 500; }
+.info-value { font-size: 14px; color: #333; font-weight: 500; }
+.info-value.mono { font-family: monospace; font-size: 12px; }
+.text-green { color: #16a34a !important; }
+.text-red   { color: #dc2626 !important; }
 
 /* Toast */
 .toast {
@@ -817,23 +749,15 @@ textarea.form-input {
   opacity: 0;
   transition: all 0.3s;
   z-index: 200;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.15);
 }
 
-.toast.show {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-.toast.error {
-  background: #dc2626;
-}
+.toast.show  { transform: translateY(0); opacity: 1; }
+.toast.error { background: #dc2626; }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .page {
-    padding: 20px;
-  }
+  .page { padding: 20px; }
 
   .profile-header {
     flex-direction: column;
@@ -846,16 +770,8 @@ textarea.form-input {
     justify-content: center;
   }
 
-  .form-row {
-    grid-template-columns: 1fr;
-  }
-
-  .stats-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .info-grid {
-    grid-template-columns: 1fr;
-  }
+  .form-row { grid-template-columns: 1fr; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .info-grid { grid-template-columns: 1fr; }
 }
 </style>
