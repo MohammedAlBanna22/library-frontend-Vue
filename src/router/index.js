@@ -10,9 +10,9 @@ import AuthorsView from '../views/AuthorsView.vue'
 import AuthorRequestsView from '../views/AuthorRequestsView.vue'
 import ResetPasswordView from '../views/ResetPasswordView.vue'
 import BookDetailView from '../views/BookDetailView.vue'
-import MemberProfile from '../views/MemberProfile.vue'
+import MemberProfile from '../views/Memberprofile.vue'
 import CompleteProfileView from '../views/CompleteProfileView.vue'
-import AuthorBooks from '../views/AuthorBooksView.vue'
+import AuthorBooks from '../views/AuthorbooksView.vue'
 import HomeView from '../views/HomeView.vue'
 
 const routes = [
